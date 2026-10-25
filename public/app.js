@@ -53,6 +53,7 @@ function headerRight() {
   const s = ui.state;
   const g = s.github?.guardrails;
   return `<div class="ml-auto flex flex-wrap items-center gap-2">
+    <span class="chip bg-white ring-stone-200 ${ui.live ? "text-emerald-700" : "text-stone-500"}" title="${ui.live ? "Updates arrive as they happen" : "Not connected for live updates; checking every 15 seconds"}"><span class="h-1.5 w-1.5 rounded-full ${ui.live ? "bg-emerald-500" : "bg-stone-400"}"></span>${ui.live ? "live" : "reconnecting"}</span>
     ${g ? `<span class="chip ${g.canOpenPr ? toneClass.emerald : toneClass.amber}" title="${esc(g.rule)}">${logo("github", 11)} open PRs ${g.openPrs}/${g.prLimit}</span>` : ""}
     <span class="chip bg-white text-stone-500 ring-stone-200">API ${s.github?.rate?.remaining ?? "?"} left</span>
     <button class="btn btn-ghost text-xs" data-action="settings">Settings</button>
@@ -165,7 +166,7 @@ function machineSetupCard(machine) {
   if (machine.gpus?.some((gpu) => gpu.vendor === "nvidia") && machine.engine === "podman") warnings.push("Podman uses CDI for NVIDIA: run <code>sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml</code> once.");
   if (!machine.gpus?.length) warnings.push("No GPU found: Vulkan tests will need a GPU (CPU-only machines come in a later version).");
   if ((machine.diskFreeGb || 0) < 40) warnings.push(`Only ${machine.diskFreeGb} GB free in the home folder; builds need about 40 GB.`);
-  return `<article class="rounded-2xl bg-white p-4 ring-1 ring-stone-200">
+  return `<article data-key="setup-${esc(machine.id)}" class="rounded-2xl bg-white p-4 ring-1 ring-stone-200">
     <div class="flex flex-wrap items-center gap-3"><div class="grid h-11 w-11 place-items-center rounded-xl bg-stone-50 ring-1 ring-stone-200">${logo(osLogo(machine.os), 24)}</div>
       <div class="min-w-0 flex-1"><div class="font-bold text-stone-900">${esc(machine.name)} <span class="text-xs font-normal text-stone-400">${machine.kind === "ssh" ? `${esc(machine.user)}@${esc(machine.host)}:${machine.port}` : "this computer"}</span></div>
         <div class="text-xs text-stone-500">${esc(machine.os)} · ${esc(machine.cpu?.model)} · ${machine.cpu?.cores} threads · ${Math.round((machine.memMb || 0) / 1024)} GB · ${machine.engine ? `${logo(machine.engine === "podman" ? "podman" : "docker", 11)} ${esc(machine.engine)}` : `<span class="font-semibold text-rose-600">no container engine yet</span>`}</div></div>
@@ -268,7 +269,7 @@ function requestsPanel(s) {
   const recent = (s.requests || []).filter((request) => request.status !== "pending").slice(0, 6);
   if (!pending.length && !recent.length) return "";
   return `<section class="card p-5 ${pending.length ? "ring-2 ring-amber-300" : ""}"><h2 class="section-title mb-4"><span class="h-2 w-2 rounded-full ${pending.length ? "animate-pulse bg-amber-500" : "bg-brand-500"}"></span>Requests from your AI${pending.length ? `<span class="chip bg-amber-50 text-amber-800 ring-amber-200">${pending.length} waiting</span>` : ""}</h2>
-    <div class="grid gap-3 lg:grid-cols-2">${pending.map((request) => `<article class="rounded-2xl bg-amber-50/70 p-4 ring-1 ring-amber-300"><div class="mb-2 flex items-center gap-2"><span class="text-lg">✋</span><div class="flex-1"><div class="text-sm font-bold text-stone-900">${esc(toolTitles[request.tool] || request.tool)}</div><div class="text-[11px] text-stone-500">${esc(request.agentName)} · ${esc(ago(request.created))}</div></div></div><div class="space-y-1 text-sm text-stone-700">${requestBody(request)}</div>
+    <div class="grid gap-3 lg:grid-cols-2">${pending.map((request) => `<article data-key="request-${esc(request.id)}" class="rounded-2xl bg-amber-50/70 p-4 ring-1 ring-amber-300"><div class="mb-2 flex items-center gap-2"><span class="text-lg">✋</span><div class="flex-1"><div class="text-sm font-bold text-stone-900">${esc(toolTitles[request.tool] || request.tool)}</div><div class="text-[11px] text-stone-500">${esc(request.agentName)} · ${esc(ago(request.created))}</div></div></div><div class="space-y-1 text-sm text-stone-700">${requestBody(request)}</div>
       <div class="mt-3 flex flex-wrap gap-2"><button class="btn btn-primary text-xs" data-decide="${esc(request.id)}" data-choice="approve">Approve</button><button class="btn btn-ghost text-xs" data-decide="${esc(request.id)}" data-choice="deny">Deny</button>${request.tool !== "run_command" && request.tool !== "fix_machine" ? `<button class="btn btn-ghost text-xs" data-decide="${esc(request.id)}" data-choice="approve" data-always="1">Always allow for ${esc(request.agentName)}</button>` : ""}</div></article>`).join("")}</div>
     ${recent.length ? `<ol class="mt-4 space-y-1 text-xs text-stone-500">${recent.map((request) => `<li class="flex gap-2"><span class="w-14 shrink-0 text-right text-stone-400">${esc(ago(request.decided || request.created))}</span>${chip(request.status, request.status === "done" ? "clean" : request.status === "denied" ? "cancelled" : request.status)}<span>${esc(request.agentName)}: ${esc(toolTitles[request.tool] || request.tool)}${request.status === "failed" ? ` (${esc(request.result?.error || "")})` : ""}</span></li>`).join("")}</ol>` : ""}</section>`;
 }
@@ -311,7 +312,7 @@ function machinesPanel(s, compact = false) {
     const work = [...running.map((job) => `Verifying ${job.title}`), ...agentsHere.map((agent) => `${agent.name}: ${agent.status.task}`), ...(machine.prepare?.status === "running" ? ["Building the build image"] : [])];
     const gpus = (live.gpus || []).map((gpu) => `<div class="rounded-xl bg-stone-50 p-2.5 ring-1 ring-stone-100"><div class="mb-1.5 flex items-center gap-2 text-xs font-semibold text-stone-700">${logo(gpu.vendor, 14)}<span class="truncate">${esc(gpu.name)}</span><span class="ml-auto font-mono text-stone-400">${gpu.temp ? `${gpu.temp}°C` : ""} ${gpu.power ? `${Math.round(gpu.power)}W` : ""}</span></div><div class="grid grid-cols-[52px_1fr] items-center gap-x-2 gap-y-1 text-[11px] text-stone-500"><span>util ${gpu.util ?? 0}%</span>${bar((gpu.util || 0) / 100)}<span>vram</span>${bar(gpu.memTotal ? gpu.memUsed / gpu.memTotal : 0)}</div></div>`).join("");
     const vendor = machine.gpus?.find((gpu) => gpu.vendor !== "other")?.vendor || osLogo(machine.os);
-    return `<article class="card flex flex-col gap-3 p-4"><div class="flex items-start gap-3"><div class="relative grid h-11 w-11 place-items-center rounded-xl bg-white ring-1 ring-stone-200">${logo(vendor, 26)}<span class="absolute -right-1.5 -bottom-1.5 grid h-5 w-5 place-items-center rounded-md bg-white ring-1 ring-stone-200">${logo(osLogo(machine.os), 12)}</span></div>
+    return `<article data-key="fleet-${esc(machine.id)}" class="card flex flex-col gap-3 p-4"><div class="flex items-start gap-3"><div class="relative grid h-11 w-11 place-items-center rounded-xl bg-white ring-1 ring-stone-200">${logo(vendor, 26)}<span class="absolute -right-1.5 -bottom-1.5 grid h-5 w-5 place-items-center rounded-md bg-white ring-1 ring-stone-200">${logo(osLogo(machine.os), 12)}</span></div>
       <div class="min-w-0 flex-1"><div class="flex items-center gap-2"><h3 class="font-bold text-stone-900">${esc(machine.name)}</h3><span class="h-2 w-2 rounded-full ${live.online ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)]" : "bg-rose-500"}"></span><span class="ml-auto text-[11px] text-stone-400">${esc(ago(live.checked))}</span></div><p class="truncate text-xs text-stone-500">${machine.kind === "ssh" ? `${esc(machine.user)}@${esc(machine.host)}` : "this computer"} · ${machine.engine ? esc(machine.engine) : `<span class="font-semibold text-rose-600">no container engine</span>`} · ${readiness(machine)}</p></div></div>
       <div class="grid grid-cols-[64px_1fr] items-center gap-x-2 gap-y-1.5 text-[11px] text-stone-500"><span>cpu ${Math.round((load / cores) * 100)}%</span>${bar(load / cores)}<span>mem ${Math.round(mem * 100)}%</span>${bar(mem)}</div>
       ${gpus ? `<div class="grid gap-2">${gpus}</div>` : ""}
@@ -329,7 +330,7 @@ function jobsPanel(s) {
       const key = gpu.result?.verdict || (stage.status === "running" ? "running" : stage.status);
       return `<div class="flex min-w-0 items-center gap-2 rounded-xl bg-stone-50 px-2.5 py-2 ring-1 ring-stone-100" title="${esc(stage.reason || gpu.result?.gpu || "")}">${logo(gpu.vendor, 16)}<div class="min-w-0"><div class="truncate text-[11px] font-semibold text-stone-700">${esc(gpu.label)}</div><div class="truncate text-[10px] text-stone-400">${esc(stage.machineName)}</div>${chip(key)}</div></div>`;
     })).join("");
-    return `<article class="rounded-2xl p-4 ring-1 ${job.status === "awaiting-approval" ? "bg-amber-50/50 ring-amber-200" : job.status === "running" ? "bg-gradient-to-br from-brand-50/60 to-white ring-stone-200" : "bg-white ring-stone-200"}">
+    return `<article data-key="job-${esc(job.id)}" class="rounded-2xl p-4 ring-1 ${job.status === "awaiting-approval" ? "bg-amber-50/50 ring-amber-200" : job.status === "running" ? "bg-gradient-to-br from-brand-50/60 to-white ring-stone-200" : "bg-white ring-stone-200"}">
       <div class="flex flex-wrap items-center gap-2"><img src="https://github.com/${esc(job.owner)}.png?size=48" class="h-7 w-7 rounded-full ring-2 ring-white" alt="">
         <div class="min-w-0 flex-1"><div class="truncate font-semibold text-stone-900">${esc(job.title)}</div><div class="truncate font-mono text-[11px] text-stone-500">${esc(job.owner)}/${esc(job.branch)}${job.issue ? ` · <a class="text-brand-600 hover:underline" target="_blank" href="https://github.com/${esc(s.repo)}/issues/${job.issue}">#${job.issue}</a>` : ""} · ${job.requestedBy === "you" ? "you" : `🤖 ${esc(job.requestedBy)}`} · ${esc(ago(job.created))}</div></div>
         ${chip(job.status)}
@@ -402,47 +403,64 @@ function dashboard() {
     ${Object.keys(s.errors || {}).length ? `<div class="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-amber-200">${Object.entries(s.errors).map(([k, v]) => `<div><b>${esc(k)}</b>: ${esc(v)}</div>`).join("")}</div>` : ""}`);
 }
 
-function snapshot(app) {
-  const fields = {};
-  for (const field of app.querySelectorAll("form[data-form] [name]")) {
-    const key = `${field.closest("form").dataset.form}:${field.name}`;
-    if (field.type === "radio") { if (field.checked) fields[key] = field.value; }
-    else if (field.type === "checkbox") fields[key] = field.checked;
-    else if (field.value !== "") fields[key] = field.value;
-  }
-  const open = [...app.querySelectorAll("details[data-keep]")].map((details) => [details.dataset.keep, details.open]);
-  const active = document.activeElement;
-  const focus = active?.name && active.closest?.("form[data-form]") ? { key: `${active.closest("form").dataset.form}:${active.name}`, start: active.selectionStart, end: active.selectionEnd } : null;
-  return { fields, open, focus };
+function key(node) {
+  return node.nodeType === 1 ? node.getAttribute("data-key") : null;
 }
 
-function restore(app, saved) {
-  const skip = ui.skipRestore;
-  ui.skipRestore = null;
-  for (const field of app.querySelectorAll("form[data-form] [name]")) {
-    const key = `${field.closest("form").dataset.form}:${field.name}`;
-    if (!(key in saved.fields) || field.closest("form").dataset.form === skip) continue;
-    if (field.type === "radio") field.checked = field.value === saved.fields[key];
-    else if (field.type === "checkbox") field.checked = saved.fields[key];
-    else field.value = saved.fields[key];
+function same(current, next) {
+  if (current.nodeType !== next.nodeType) return false;
+  if (current.nodeType !== 1) return true;
+  return current.tagName === next.tagName && ["data-form", "name", "type", "id"].every((name) => current.getAttribute(name) === next.getAttribute(name));
+}
+
+function patchAttributes(current, next) {
+  const details = current.tagName === "DETAILS";
+  for (const { name } of [...current.attributes]) if (!next.hasAttribute(name) && !(details && name === "open")) current.removeAttribute(name);
+  for (const { name, value } of [...next.attributes]) {
+    if ((details && name === "open") || current.getAttribute(name) === value) continue;
+    current.setAttribute(name, value);
+    if (name === "value" && current !== document.activeElement) current.value = value;
   }
-  for (const [key, open] of saved.open) { const details = app.querySelector(`details[data-keep="${key}"]`); if (details) details.open = open; }
-  if (saved.focus) {
-    const field = [...app.querySelectorAll("form[data-form] [name]")].find((entry) => `${entry.closest("form").dataset.form}:${entry.name}` === saved.focus.key);
-    if (field) { field.focus(); try { if (saved.focus.start !== null && saved.focus.start !== undefined) field.setSelectionRange(saved.focus.start, saved.focus.end); } catch {} }
+  if (current.tagName === "INPUT" && (current.type === "checkbox" || current.type === "radio") && !current.closest("form[data-form]")) current.checked = next.hasAttribute("checked");
+}
+
+function patch(current, next) {
+  if (current.nodeType !== 1) { if (current.nodeValue !== next.nodeValue) current.nodeValue = next.nodeValue; return; }
+  patchAttributes(current, next);
+  if (current.tagName !== "TEXTAREA") patchChildren(current, next);
+}
+
+function patchChildren(parent, next) {
+  const keyed = new Map();
+  for (const child of parent.childNodes) if (key(child)) keyed.set(key(child), child);
+  let cursor = parent.firstChild;
+  for (const node of [...next.childNodes]) {
+    const nodeKey = key(node);
+    const candidate = nodeKey ? keyed.get(nodeKey) : cursor && !key(cursor) ? cursor : null;
+    const match = candidate && same(candidate, node) ? candidate : null;
+    if (!match) { parent.insertBefore(node, cursor); continue; }
+    keyed.delete(nodeKey);
+    if (match === cursor) cursor = cursor.nextSibling;
+    else parent.insertBefore(match, cursor);
+    patch(match, node);
   }
+  while (cursor) { const following = cursor.nextSibling; cursor.remove(); cursor = following; }
+}
+
+function morph(target, html) {
+  const next = document.createElement(target.tagName);
+  next.innerHTML = html;
+  patchChildren(target, next);
 }
 
 function render() {
   const app = $("#app");
-  const saved = snapshot(app);
-  if (!ui.session) { app.innerHTML = shell(`<div class="py-20 text-center text-stone-400">Loading…</div>`); return; }
-  if (ui.session.hasPassword && !ui.session.authed) app.innerHTML = loginView();
-  else if (!ui.state?.setup?.done) app.innerHTML = wizard();
-  else app.innerHTML = dashboard();
+  if (!ui.session) { morph(app, shell(`<div class="py-20 text-center text-stone-400">Loading…</div>`)); return; }
+  if (ui.session.hasPassword && !ui.session.authed) morph(app, loginView());
+  else if (!ui.state?.setup?.done) morph(app, wizard());
+  else morph(app, dashboard());
   const waiting = (ui.state?.requests || []).filter((request) => request.status === "pending").length;
   document.title = waiting ? `(${waiting}) AnyPS5 Orchestrator` : "AnyPS5 Orchestrator";
-  restore(app, saved);
 }
 
 async function refresh() {
@@ -455,6 +473,31 @@ async function refresh() {
     }
   } catch (error) { ui.flash = `offline: ${error.message}`; }
   render();
+  if (ui.session?.authed) connect();
+}
+
+function connect() {
+  if (ui.socket) return;
+  const socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live`);
+  ui.socket = socket;
+  socket.onopen = () => { ui.retry = 0; };
+  socket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if (message.type !== "state") return;
+    ui.state = message.state;
+    ui.live = true;
+    if (ui.flash?.startsWith("offline")) ui.flash = null;
+    if (!ui.publicKey && ui.state.mode === "advanced") fetch("/api/ssh-key").then((response) => response.json()).then((body) => { ui.publicKey = body.publicKey; render(); }).catch(() => {});
+    render();
+  };
+  socket.onclose = (event) => {
+    ui.socket = null;
+    ui.live = false;
+    render();
+    const wait = event.code === 4401 ? 0 : Math.min(30000, 1000 * 2 ** Math.min(5, ui.retry || 0));
+    ui.retry = (ui.retry || 0) + 1;
+    setTimeout(refresh, wait);
+  };
 }
 
 function reviewModal(files, title, onConfirm) {
@@ -528,4 +571,5 @@ document.addEventListener("click", (event) => {
 });
 
 refresh();
-setInterval(refresh, 8000);
+setInterval(() => { if (!ui.live) refresh(); }, 15000);
+setInterval(() => { if (ui.live) render(); }, 10000);

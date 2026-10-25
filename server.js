@@ -12,6 +12,7 @@ import { setDataDir, publicKey, detect, probe, validHost, validUser, localMachin
 import { createJob, tick, cancel, approve, prepare, activity, gpuTargets, install, work, checkMachine, applyFix, runAsRoot } from "./lib/runner.js";
 import { Tools } from "./lib/tools.js";
 import { serveMcp } from "./lib/mcp.js";
+import { Live } from "./lib/live.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.DATA_DIR || path.join(os.homedir(), ".anyps5-orchestrator", "server");
@@ -396,6 +397,19 @@ tools = new Tools(store, cache, {
   root: (entry, script, password) => runAsRoot(entry, script, password, entry.auth === "password" ? store.secret(entry.password) : ""),
 });
 
+const live = new Live({
+  snapshot: () => { const { now, ...rest } = state(); return rest; },
+  allowed: (request) => sessionValid(config(), cookie(request, "orch_session")),
+});
+const save = store.save.bind(store);
+store.save = () => { save(); live.changed(); };
+
+function sameOrigin(request) {
+  const origin = request.headers.origin;
+  if (!origin) return false;
+  try { return new URL(origin).host === request.headers.host; } catch { return false; }
+}
+
 function login(response) {
   const value = startSession(config());
   store.save();
@@ -433,17 +447,26 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
+server.on("upgrade", (request, socket) => {
+  socket.on("error", () => socket.destroy());
+  if (new URL(request.url, "http://local").pathname !== "/api/live") return socket.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+  if (!sameOrigin(request)) return socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+  if (!live.allowed(request)) return socket.end("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+  live.accept(request, socket);
+});
+
 function loop(name, task, every) {
   const run = async () => {
     try { await task(); delete cache.errors[name]; } catch (error) { cache.errors[name] = `${stamp()} ${error.message || error}`; }
-    setTimeout(run, every);
+    live.changed();
+    setTimeout(run, typeof every === "function" ? every() : every);
   };
   setTimeout(run, 1000);
 }
 
 loop("machines", async () => {
   await Promise.all(config().machines.map(async (entry) => { cache.machines[entry.id] = { ...(await probe(entry)), checked: stamp() }; }));
-}, 30000);
+}, () => (live.watching ? 10000 : 30000));
 loop("github", () => collect(store, cache), 5 * 60000);
 loop("jobs", () => tick(store), 20000);
 for (const entry of config().machines) if (entry.prepare?.status === "running") entry.prepare = { status: "needed", note: "interrupted by a restart" };

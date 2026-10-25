@@ -132,3 +132,21 @@ test("root commands are quoted and choose sudo correctly", () => {
   assert.match(withPassword.command, /^sudo -S -p '' bash -c '/);
   assert.equal(execFileSync("bash", ["-c", `printf %s ${shellQuote("a'b\"c $HOME")}`]).toString(), "a'b\"c $HOME");
 });
+
+import { frame, readFrames, acceptKey } from "../lib/live.js";
+
+test("WebSocket frames", () => {
+  assert.equal(acceptKey("dGhlIHNhbXBsZSBub25jZQ=="), "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
+  const big = frame(1, Buffer.alloc(70000, 97));
+  assert.equal(big[1], 127);
+  assert.equal(big.length, 70010);
+  const mask = Buffer.from([1, 2, 3, 4]);
+  const text = Buffer.from("hello");
+  const masked = Buffer.concat([Buffer.from([0x81, 0x80 | text.length]), mask, Buffer.from(text.map((byte, index) => byte ^ mask[index & 3]))]);
+  const half = readFrames(masked.subarray(0, 4));
+  assert.equal(half.frames.length, 0);
+  const { frames, rest } = readFrames(Buffer.concat([masked, masked.subarray(0, 3)]));
+  assert.equal(frames[0].payload.toString(), "hello");
+  assert.equal(rest.length, 3);
+  assert.match(readFrames(frame(1, text)).error, /masked/);
+});

@@ -27,6 +27,7 @@ It has no AI of its own. You connect the one you already use (Claude Code, Codex
 - **The dashboard is private.**
   - A one-time setup code (printed in the server log) is needed to claim a new instance, after which it's protected by your password. Repeated wrong passwords are slowed down.
   - Secrets (your GitHub token, saved SSH passwords) are encrypted in the data folder, which only you can read.
+  - The page updates live over a WebSocket at `/api/live`, which only accepts a signed-in session from the dashboard's own address. A reverse proxy in front of it must pass WebSocket upgrades through; if it doesn't, the page falls back to checking every 15 seconds.
   - Started with Node, it listens on `127.0.0.1` only. The Docker image listens on all interfaces, so keep it on a trusted network, or put it behind HTTPS if it must be reachable from elsewhere.
 - **Root is explicit.** Machine fixes run as root through `sudo` and always show the exact commands first. A `sudo` password you type is used once and not saved. GPU kernel drivers are never installed automatically.
 

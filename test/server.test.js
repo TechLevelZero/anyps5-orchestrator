@@ -4,6 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import http from "node:http";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -116,4 +118,52 @@ test("adding a machine explains SSH failures", async () => {
   assert.match(refused.body.error, /refused the connection on port 1/);
   const state = (await api("GET", "/api/state")).body;
   assert.match(state.activity[0].text, /Couldn't add nobody@127\.0\.0\.1/);
+});
+
+function openLive(headers) {
+  return new Promise((resolve) => {
+    const request = http.request(`${base}/api/live`, { headers: { Connection: "Upgrade", Upgrade: "websocket", "Sec-WebSocket-Version": "13", "Sec-WebSocket-Key": crypto.randomBytes(16).toString("base64"), ...headers } });
+    request.on("response", (response) => resolve({ status: response.statusCode }));
+    request.on("upgrade", (response, socket) => {
+      const messages = [];
+      const waiters = [];
+      let buffer = Buffer.alloc(0);
+      let closed = null;
+      socket.on("data", (chunk) => {
+        buffer = Buffer.concat([buffer, chunk]);
+        while (buffer.length >= 2) {
+          let length = buffer[1] & 0x7f;
+          let start = 2;
+          if (length === 126) { length = buffer.readUInt16BE(2); start = 4; } else if (length === 127) { length = Number(buffer.readBigUInt64BE(2)); start = 10; }
+          if (buffer.length < start + length) break;
+          const opcode = buffer[0] & 0x0f;
+          const payload = buffer.subarray(start, start + length);
+          buffer = buffer.subarray(start + length);
+          if (opcode === 1) messages.push(JSON.parse(payload));
+          if (opcode === 8) closed = payload.readUInt16BE(0);
+          waiters.splice(0).forEach((wake) => wake());
+        }
+      });
+      const until = async (test) => { for (let tries = 0; tries < 50 && !test(); tries++) await new Promise((wake) => { waiters.push(wake); setTimeout(wake, 100); }); return test(); };
+      resolve({ status: response.statusCode, messages, until, closed: () => closed, socket });
+    });
+    request.end();
+  });
+}
+
+test("live updates need a session from the same site, push changes and end at sign-out", async () => {
+  const origin = { Origin: base };
+  assert.equal((await openLive(origin)).status, 401);
+  assert.equal((await openLive({ Cookie: cookie, Origin: "http://evil.example" })).status, 403);
+  assert.equal((await openLive({ Cookie: cookie })).status, 403);
+  const live = await openLive({ Cookie: cookie, ...origin });
+  assert.equal(live.status, 101);
+  assert.ok(await live.until(() => live.messages.length >= 1));
+  assert.ok(Array.isArray(live.messages[0].state.machines));
+  assert.equal(live.messages[0].state.now, undefined);
+  await user("POST", "/api/plans", { title: "Pushed live" });
+  assert.ok(await live.until(() => live.messages.some((message) => message.state.plans.some((entry) => entry.title === "Pushed live"))));
+  await user("POST", "/api/logout");
+  assert.ok(await live.until(() => live.closed() === 4401));
+  live.socket.destroy();
 });
