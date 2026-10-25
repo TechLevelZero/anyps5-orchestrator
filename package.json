@@ -1,0 +1,32 @@
+{
+  "name": "anyps5-orchestrator",
+  "version": "0.1.0-beta",
+  "description": "Self-hosted dashboard and verification runner for AnyPS5 contributors: your GitHub work, your machines and your AI agent in one place.",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "anyps5-orchestrator": "server.js",
+    "anyps5-orchestrator-mcp": "mcp/server.js"
+  },
+  "scripts": {
+    "build": "tailwindcss -i src/app.css -o public/app.css --minify",
+    "start": "node server.js",
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\""
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.1.11",
+    "tailwindcss": "4.1.11"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TechLevelZero/anyps5-orchestrator.git"
+  },
+  "homepage": "https://github.com/TechLevelZero/anyps5-orchestrator#readme",
+  "bugs": {
+    "url": "https://github.com/TechLevelZero/anyps5-orchestrator/issues"
+  }
+}

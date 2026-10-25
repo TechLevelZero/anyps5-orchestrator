@@ -1,0 +1,10 @@
+services:
+  orchestrator:
+    build: .
+    container_name: ${NAME:-anyps5-orchestrator}
+    restart: unless-stopped
+    user: "${UID_GID:-1000:1000}"
+    ports:
+      - "${PORT:-8091}:8091"
+    volumes:
+      - ${DATA:-./data}:/data
