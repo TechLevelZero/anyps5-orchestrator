@@ -148,6 +148,16 @@ function fixModal(machine, item) {
   };
 }
 
+function readiness(machine) {
+  const status = machine.prepare?.status;
+  const failing = (machine.health?.items || []).filter((item) => item.status === "fail");
+  if (status === "running") return chip("preparing", "running");
+  if (failing.length) return chip(`${failing.length} to fix: ${failing.map((item) => item.title.toLowerCase()).join(", ")}`, "blocked");
+  if (status === "ready") return chip("ready", "ready");
+  if (status === "failed") return chip("prepare failed", "blocked");
+  return chip("not prepared yet", "needed");
+}
+
 function machineSetupCard(machine) {
   const prep = machine.prepare || {};
   const warnings = [];
@@ -160,7 +170,7 @@ function machineSetupCard(machine) {
       <div class="min-w-0 flex-1"><div class="font-bold text-stone-900">${esc(machine.name)} <span class="text-xs font-normal text-stone-400">${machine.kind === "ssh" ? `${esc(machine.user)}@${esc(machine.host)}:${machine.port}` : "this computer"}</span></div>
         <div class="text-xs text-stone-500">${esc(machine.os)} · ${esc(machine.cpu?.model)} · ${machine.cpu?.cores} threads · ${Math.round((machine.memMb || 0) / 1024)} GB · ${machine.engine ? `${logo(machine.engine === "podman" ? "podman" : "docker", 11)} ${esc(machine.engine)}` : `<span class="font-semibold text-rose-600">no container engine yet</span>`}</div></div>
       ${machine.kind === "ssh" ? `<span class="chip ${machine.auth === "password" ? toneClass.amber : toneClass.stone}">${machine.auth === "password" ? "password sign-in" : "key sign-in"}</span>${machine.auth === "password" ? `<button class="btn btn-ghost text-xs" data-tokey="${esc(machine.id)}">Switch to key</button>` : ""}` : ""}
-      ${chip(prep.status === "running" ? "preparing" : prep.status || "needed", prep.status === "running" ? "running" : prep.status || "needed")}
+      ${readiness(machine)}
       <button class="btn btn-primary text-xs" data-prepare="${esc(machine.id)}" ${prep.status === "running" || !machine.engine ? "disabled" : ""} title="${machine.engine ? "" : "Install Docker or Podman first (see the health check below)"}">${prep.status === "running" ? `${spinner} Preparing…` : prep.status === "ready" ? "Re-check" : "Prepare"}</button>
       <button class="btn btn-ghost text-xs" data-remove="${esc(machine.id)}">Remove</button></div>
     <div class="mt-3 grid gap-2">${(machine.gpus || []).map((gpu, index) => gpuRow(machine, gpu, index)).join("")}</div>
@@ -302,7 +312,7 @@ function machinesPanel(s, compact = false) {
     const gpus = (live.gpus || []).map((gpu) => `<div class="rounded-xl bg-stone-50 p-2.5 ring-1 ring-stone-100"><div class="mb-1.5 flex items-center gap-2 text-xs font-semibold text-stone-700">${logo(gpu.vendor, 14)}<span class="truncate">${esc(gpu.name)}</span><span class="ml-auto font-mono text-stone-400">${gpu.temp ? `${gpu.temp}°C` : ""} ${gpu.power ? `${Math.round(gpu.power)}W` : ""}</span></div><div class="grid grid-cols-[52px_1fr] items-center gap-x-2 gap-y-1 text-[11px] text-stone-500"><span>util ${gpu.util ?? 0}%</span>${bar((gpu.util || 0) / 100)}<span>vram</span>${bar(gpu.memTotal ? gpu.memUsed / gpu.memTotal : 0)}</div></div>`).join("");
     const vendor = machine.gpus?.find((gpu) => gpu.vendor !== "other")?.vendor || osLogo(machine.os);
     return `<article class="card flex flex-col gap-3 p-4"><div class="flex items-start gap-3"><div class="relative grid h-11 w-11 place-items-center rounded-xl bg-white ring-1 ring-stone-200">${logo(vendor, 26)}<span class="absolute -right-1.5 -bottom-1.5 grid h-5 w-5 place-items-center rounded-md bg-white ring-1 ring-stone-200">${logo(osLogo(machine.os), 12)}</span></div>
-      <div class="min-w-0 flex-1"><div class="flex items-center gap-2"><h3 class="font-bold text-stone-900">${esc(machine.name)}</h3><span class="h-2 w-2 rounded-full ${live.online ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)]" : "bg-rose-500"}"></span><span class="ml-auto text-[11px] text-stone-400">${esc(ago(live.checked))}</span></div><p class="truncate text-xs text-stone-500">${machine.kind === "ssh" ? `${esc(machine.user)}@${esc(machine.host)}` : "this computer"} · ${esc(machine.engine)} · ${chip(machine.prepare?.status || "needed")}</p></div></div>
+      <div class="min-w-0 flex-1"><div class="flex items-center gap-2"><h3 class="font-bold text-stone-900">${esc(machine.name)}</h3><span class="h-2 w-2 rounded-full ${live.online ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)]" : "bg-rose-500"}"></span><span class="ml-auto text-[11px] text-stone-400">${esc(ago(live.checked))}</span></div><p class="truncate text-xs text-stone-500">${machine.kind === "ssh" ? `${esc(machine.user)}@${esc(machine.host)}` : "this computer"} · ${machine.engine ? esc(machine.engine) : `<span class="font-semibold text-rose-600">no container engine</span>`} · ${readiness(machine)}</p></div></div>
       <div class="grid grid-cols-[64px_1fr] items-center gap-x-2 gap-y-1.5 text-[11px] text-stone-500"><span>cpu ${Math.round((load / cores) * 100)}%</span>${bar(load / cores)}<span>mem ${Math.round(mem * 100)}%</span>${bar(mem)}</div>
       ${gpus ? `<div class="grid gap-2">${gpus}</div>` : ""}
       <div class="rounded-xl bg-gradient-to-br from-brand-50 to-white p-3 ring-1 ring-brand-100"><div class="mb-1 text-[11px] font-bold tracking-wider text-brand-700 uppercase">Working on</div><ul class="space-y-1 text-sm text-stone-700">${(work.length ? work : [live.online ? "Idle" : live.error || "Offline"]).map((line) => `<li class="flex gap-2"><span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400"></span><span>${esc(line)}</span></li>`).join("")}</ul></div>
