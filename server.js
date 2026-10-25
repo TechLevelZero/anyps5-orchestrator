@@ -107,7 +107,32 @@ function machine(idValue) {
   return found;
 }
 
+function explainSsh(error, entry) {
+  const text = String(error.message || error);
+  const where = `${entry.user}@${entry.host}`;
+  if (/Permission denied|wrong password|Authentication failed/i.test(text)) {
+    return entry.auth === "key" && !entry.password && !entry.triedPassword
+      ? `${where} turned down the orchestrator's key. With "Key only", add the key shown above to ~/.ssh/authorized_keys of ${entry.user} on that machine first, or choose "Password, then a key".`
+      : `${where} turned down the sign-in. Check that "${entry.user}" is the user name on that machine (not the one on this computer) and that the password is right.`;
+  }
+  if (/Connection refused/i.test(text)) return `${entry.host} refused the connection on port ${entry.port}: is SSH running there, and is that the right port?`;
+  if (/timed out|No route to host|Network is unreachable/i.test(text)) return `${entry.host} didn't answer on port ${entry.port}: check the address, and that a firewall isn't blocking SSH.`;
+  if (/Could not resolve|Name or service not known/i.test(text)) return `"${entry.host}" isn't a name this computer can find: use the machine's IP address or full host name.`;
+  if (/REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed/i.test(text)) return `${entry.host}'s SSH host key is different from the one saved for it. If the machine was reinstalled, remove its line from ssh/known_hosts in the orchestrator's data folder and try again.`;
+  return text;
+}
+
 async function addMachine(input) {
+  try {
+    return await addMachineChecked(input);
+  } catch (error) {
+    const label = input.kind === "local" ? "this computer" : `${input.user || "?"}@${input.host || "?"}`;
+    activity(store, `Couldn't add ${label}: ${error.message}`);
+    throw error;
+  }
+}
+
+async function addMachineChecked(input) {
   const c = config();
   let entry;
   if (input.kind === "local") {
@@ -122,11 +147,14 @@ async function addMachine(input) {
     if (c.machines.some((existing) => existing.kind === "ssh" && existing.host === entry.host && existing.user === entry.user && existing.port === entry.port)) throw new Error("that machine is already added");
     if (auth !== "key") {
       if (typeof input.password !== "string" || !input.password) throw new Error("enter the password for that user");
-      if (auth === "password-key") await installKey(entry, input.password);
+      entry.triedPassword = true;
+      if (auth === "password-key") { try { await installKey(entry, input.password); } catch (error) { throw new Error(explainSsh(error, entry)); } }
       else entry.password = secrets.seal(input.password);
     }
   }
-  const found = await detect(entry);
+  let found;
+  try { found = await detect(entry); } catch (error) { throw new Error(explainSsh(error, entry)); }
+  delete entry.triedPassword;
   if (!found.engine) throw new Error(entry.kind === "local" && inContainer ? "the orchestrator runs inside a container, which has no Docker or Podman of its own: choose Advanced and add the machines (this host too, if it should build) over SSH" : `${entry.name}: neither Docker nor Podman is usable here`);
   if (!found.tools.includes("python3") || !found.tools.includes("flock")) throw new Error(`${entry.name}: python3 and flock are needed on the host`);
   Object.assign(entry, { engine: found.engine, engines: found.engines, os: found.os, cpu: found.cpu, memMb: found.memMb, diskFreeGb: found.diskFreeGb, nvidiaToolkit: found.nvidiaToolkit, gpus: found.gpus.map((gpu) => ({ ...gpu, enabled: true })), detected: found.detected, prepare: { status: "needed" }, enabled: true });

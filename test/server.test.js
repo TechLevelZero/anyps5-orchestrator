@@ -109,3 +109,11 @@ test("repeated wrong passwords are slowed down", async () => {
   assert.match(blocked.body.error, /too many attempts/);
   cookie = saved;
 });
+
+test("adding a machine explains SSH failures", async () => {
+  const refused = await user("POST", "/api/machines", { kind: "ssh", name: "nowhere", host: "127.0.0.1", user: "nobody", port: 1, auth: "key" });
+  assert.equal(refused.status, 400);
+  assert.match(refused.body.error, /refused the connection on port 1/);
+  const state = (await api("GET", "/api/state")).body;
+  assert.match(state.activity[0].text, /Couldn't add nobody@127\.0\.0\.1/);
+});
