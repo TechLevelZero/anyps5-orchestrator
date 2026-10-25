@@ -96,7 +96,7 @@ Then run `systemctl --user enable --now anyps5-orchestrator`, and `loginctl enab
 
      The host key is pinned on first connection.
 4. **Machines.**
-   - **Health check:** each machine is checked for the container engine and your access to it, the NVIDIA driver and container support, GPU device access, `python3`, `flock` and `curl`, disk space, reflink copies, GitHub access and `sudo`.
+   - **Health check:** each machine is checked for the container engine and your access to it, the NVIDIA driver, its Vulkan libraries and container support, GPU device access, `python3`, `flock` and `curl`, disk space, reflink copies, GitHub access and `sudo`.
    - **Fixes:** failing items get a **Fix** button with the exact commands for your Linux family (Debian/Ubuntu, Fedora/RHEL, Arch, openSUSE). The exception is GPU kernel drivers, which get the steps to do by hand.
    - **Prepare:** once a machine passes, press **Prepare**. It builds the build image there (5–15 minutes the first time) and finds each GPU's Vulkan name. Untick a GPU to leave it out of tests.
 5. **Connect your AI.** Create a connection, then either:
@@ -154,6 +154,7 @@ A job's sandbox copies are deleted when it ends, and deleting a job in the dashb
 - **Lost the setup code:** it's in the data folder as `setup-code` (`data/setup-code` with Docker).
 - **"Host key verification failed":** the machine's SSH host key changed since it was added. If that's expected (a reinstall), remove the machine's line from `ssh/known_hosts` in the data folder and add the machine again.
 - **An NVIDIA GPU isn't used in containers:** run **Check again**. *NVIDIA container support* should pass; its fix installs NVIDIA's toolkit and configures Docker, or generates CDI for Podman.
+- **An NVIDIA GPU is left out after Prepare:** Vulkan can't see it inside containers, usually because only the driver's compute libraries are installed. *NVIDIA Vulkan driver* in the health check installs the graphics libraries for your driver version; run **Prepare** again afterwards.
 - **AMD or Intel GPU missing after Prepare:** the health check's *GPU device access* item adds you to the `render` and `video` groups. Run **Prepare** again afterwards.
 - **A job fails right away:** the reason is shown on the job. `get_job_log` (or the machine's `jobs/<id>/run.log`) has the details.
 

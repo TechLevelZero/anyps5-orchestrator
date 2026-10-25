@@ -49,6 +49,18 @@ esac
 if [ "$NVIDIA_PCI" = 1 ]; then
   if have nvidia-smi && nvidia-smi -L >/dev/null 2>&1; then out nvidia-driver ok "NVIDIA driver" "$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1), $(nvidia-smi -L | wc -l) GPU(s)"
   else out nvidia-driver fail "NVIDIA driver" "an NVIDIA GPU is present but the NVIDIA driver isn't working (nvidia-smi fails)" "${ID:-}"; fi
+  if have nvidia-smi && nvidia-smi -L >/dev/null 2>&1; then
+    if { ldconfig -p 2>/dev/null || /sbin/ldconfig -p 2>/dev/null; } | grep -q 'libGLX_nvidia\.so\.0'; then out nvidia-vulkan ok "NVIDIA Vulkan driver" "the driver's graphics libraries are installed, so containers get Vulkan on the GPU"
+    else
+      SOURCE=manual
+      if have rpm && rpm -q nvidia-driver-cuda >/dev/null 2>&1; then SOURCE=cuda-repo
+      elif have rpm && rpm -q xorg-x11-drv-nvidia >/dev/null 2>&1; then SOURCE=rpmfusion
+      elif have dpkg-query && dpkg-query -W -f='${Package} ${Status}\n' 'nvidia-*' 2>/dev/null | grep 'install ok installed' | grep -q -- '-server '; then SOURCE=apt-server
+      elif have dpkg-query && dpkg-query -W -f='${Package} ${Status}\n' 'nvidia-*' 2>/dev/null | grep -q 'install ok installed'; then SOURCE=apt
+      elif [ "$FAMILY" = arch ]; then SOURCE=pacman; fi
+      out nvidia-vulkan fail "NVIDIA Vulkan driver" "only the driver's compute libraries are installed, so Vulkan can't use the NVIDIA GPU and tests would fall back to the CPU" "$SOURCE"
+    fi
+  fi
   if [ "$ENGINE" = docker ]; then
     if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q nvidia || docker info 2>/dev/null | grep -qi 'cdi.*nvidia.com/gpu'; then out nvidia-toolkit ok "NVIDIA container support" "Docker has the NVIDIA runtime"
     elif have nvidia-ctk; then out nvidia-toolkit fail "NVIDIA container support" "the NVIDIA Container Toolkit is installed but Docker isn't configured to use it" configure-docker

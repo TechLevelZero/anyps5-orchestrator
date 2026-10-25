@@ -210,9 +210,10 @@ function startPrepare(entry) {
       if (match) { gpu.vulkanName = match.name; gpu.driver = match.driver; }
     });
     const nvidia = devices.nvidia.filter((device) => !/CPU/.test(device.type || "") && (!device.vendorId || device.vendorId === "0x10de"));
-    entry.gpus.filter((gpu) => gpu.vendor === "nvidia").forEach((gpu, index) => { const match = nvidia.find((device) => device.name === gpu.name) || nvidia[index]; if (match) { gpu.vulkanName = match.name; gpu.driver = match.driver; } });
+    entry.gpus.filter((gpu) => gpu.vendor === "nvidia").forEach((gpu, index) => { const match = nvidia.find((device) => device.name === gpu.name) || nvidia[index]; if (match) { gpu.vulkanName = match.name; gpu.driver = match.driver; } else delete gpu.vulkanName; });
     entry.prepare = { status: "ready", finished: stamp(), devices };
-    activity(store, `${entry.name} is ready: ${gpuTargets(entry).map((target) => target.label).join(", ") || "no Vulkan GPU found"}`);
+    const unseen = entry.gpus.filter((gpu) => !gpu.vulkanName).map((gpu) => gpu.name);
+    activity(store, `${entry.name} is ready: ${gpuTargets(entry).map((target) => target.label).join(", ") || "no Vulkan GPU found"}${unseen.length ? `; Vulkan can't see ${unseen.join(", ")} inside containers, so ${unseen.length > 1 ? "they are" : "it is"} left out of tests (see the health check)` : ""}`);
   }).catch((error) => {
     entry.prepare = { status: "failed", finished: stamp(), error: String(error.message || error) };
     activity(store, `Preparing ${entry.name} failed: ${entry.prepare.error}`);

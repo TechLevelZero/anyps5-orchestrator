@@ -54,7 +54,8 @@ test("fix branch links", () => {
 
 test("GPU targets follow enabled GPUs and Vulkan names", () => {
   const machine = { gpus: [
-    { vendor: "nvidia", index: 0, name: "NVIDIA A800", enabled: true },
+    { vendor: "nvidia", index: 0, name: "NVIDIA A800", vulkanName: "NVIDIA A800", enabled: true },
+    { vendor: "nvidia", index: 2, name: "NVIDIA A800", enabled: true },
     { vendor: "nvidia", index: 1, name: "NVIDIA A800", enabled: false },
     { vendor: "amd", name: "AMD Navi 48", vulkanName: "AMD Radeon RX 9070 XT (RADV GFX1201)", enabled: true },
     { vendor: "amd", name: "AMD Granite Ridge", enabled: true },
@@ -104,6 +105,10 @@ test("fix recipes match the Linux family and the problem", () => {
   assert.equal(recipeFor({ id: "nvidia-toolkit", status: "fail", code: "configure-docker" }, debian).risk, "medium");
   assert.equal(recipeFor({ id: "nvidia-driver", status: "fail", code: "ubuntu" }, debian).manual, true);
   assert.equal(recipeFor({ id: "engine", status: "ok" }, debian), null);
+  const vulkan = recipeFor({ id: "nvidia-vulkan", status: "fail", code: "cuda-repo" }, { family: "fedora", user: "x", items: [] });
+  assert.ok(vulkan.commands[0].includes(`nvidia-driver-libs-$(rpm -q --qf '%{EPOCH}:%{VERSION}-%{RELEASE}.%{ARCH}' nvidia-driver-cuda)`));
+  assert.match(recipeFor({ id: "nvidia-vulkan", status: "fail", code: "apt-server" }, debian).commands[1], /libnvidia-gl-.*-server/);
+  assert.equal(recipeFor({ id: "nvidia-vulkan", status: "fail", code: "manual" }, debian).manual, true);
 });
 
 test("fix recipes never take shell text from the machine", () => {
