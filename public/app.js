@@ -158,10 +158,10 @@ function machineSetupCard(machine) {
   return `<article class="rounded-2xl bg-white p-4 ring-1 ring-stone-200">
     <div class="flex flex-wrap items-center gap-3"><div class="grid h-11 w-11 place-items-center rounded-xl bg-stone-50 ring-1 ring-stone-200">${logo(osLogo(machine.os), 24)}</div>
       <div class="min-w-0 flex-1"><div class="font-bold text-stone-900">${esc(machine.name)} <span class="text-xs font-normal text-stone-400">${machine.kind === "ssh" ? `${esc(machine.user)}@${esc(machine.host)}:${machine.port}` : "this computer"}</span></div>
-        <div class="text-xs text-stone-500">${esc(machine.os)} · ${esc(machine.cpu?.model)} · ${machine.cpu?.cores} threads · ${Math.round((machine.memMb || 0) / 1024)} GB · ${logo(machine.engine === "podman" ? "podman" : "docker", 11)} ${esc(machine.engine)}</div></div>
+        <div class="text-xs text-stone-500">${esc(machine.os)} · ${esc(machine.cpu?.model)} · ${machine.cpu?.cores} threads · ${Math.round((machine.memMb || 0) / 1024)} GB · ${machine.engine ? `${logo(machine.engine === "podman" ? "podman" : "docker", 11)} ${esc(machine.engine)}` : `<span class="font-semibold text-rose-600">no container engine yet</span>`}</div></div>
       ${machine.kind === "ssh" ? `<span class="chip ${machine.auth === "password" ? toneClass.amber : toneClass.stone}">${machine.auth === "password" ? "password sign-in" : "key sign-in"}</span>${machine.auth === "password" ? `<button class="btn btn-ghost text-xs" data-tokey="${esc(machine.id)}">Switch to key</button>` : ""}` : ""}
       ${chip(prep.status === "running" ? "preparing" : prep.status || "needed", prep.status === "running" ? "running" : prep.status || "needed")}
-      <button class="btn btn-primary text-xs" data-prepare="${esc(machine.id)}" ${prep.status === "running" ? "disabled" : ""}>${prep.status === "running" ? `${spinner} Preparing…` : prep.status === "ready" ? "Re-check" : "Prepare"}</button>
+      <button class="btn btn-primary text-xs" data-prepare="${esc(machine.id)}" ${prep.status === "running" || !machine.engine ? "disabled" : ""} title="${machine.engine ? "" : "Install Docker or Podman first (see the health check below)"}">${prep.status === "running" ? `${spinner} Preparing…` : prep.status === "ready" ? "Re-check" : "Prepare"}</button>
       <button class="btn btn-ghost text-xs" data-remove="${esc(machine.id)}">Remove</button></div>
     <div class="mt-3 grid gap-2">${(machine.gpus || []).map((gpu, index) => gpuRow(machine, gpu, index)).join("")}</div>
     ${healthList(machine)}

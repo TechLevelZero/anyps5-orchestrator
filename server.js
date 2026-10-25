@@ -155,11 +155,10 @@ async function addMachineChecked(input) {
   let found;
   try { found = await detect(entry); } catch (error) { throw new Error(explainSsh(error, entry)); }
   delete entry.triedPassword;
-  if (!found.engine) throw new Error(entry.kind === "local" && inContainer ? "the orchestrator runs inside a container, which has no Docker or Podman of its own: choose Advanced and add the machines (this host too, if it should build) over SSH" : `${entry.name}: neither Docker nor Podman is usable here`);
-  if (!found.tools.includes("python3") || !found.tools.includes("flock")) throw new Error(`${entry.name}: python3 and flock are needed on the host`);
+  if (!found.engine && entry.kind === "local" && inContainer) throw new Error("the orchestrator runs inside a container, which has no Docker or Podman of its own: choose Advanced and add the machines (this host too, if it should build) over SSH");
   Object.assign(entry, { engine: found.engine, engines: found.engines, os: found.os, cpu: found.cpu, memMb: found.memMb, diskFreeGb: found.diskFreeGb, nvidiaToolkit: found.nvidiaToolkit, gpus: found.gpus.map((gpu) => ({ ...gpu, enabled: true })), detected: found.detected, prepare: { status: "needed" }, enabled: true });
   c.machines.push(entry);
-  activity(store, `Added machine ${entry.name} (${entry.gpus.map((gpu) => gpu.name).join(", ") || "no GPU"})`);
+  activity(store, `Added machine ${entry.name} (${entry.gpus.map((gpu) => gpu.name).join(", ") || "no GPU"})${entry.engine ? "" : "; it has no working container engine yet, see its health check"}`);
   runCheck(entry).catch(() => {});
   return entry;
 }
@@ -167,6 +166,10 @@ async function addMachineChecked(input) {
 async function runCheck(entry) {
   entry.healthRunning = true;
   try {
+    if (!entry.engine || !(entry.engines || []).includes(entry.engine)) {
+      const found = await detect(entry);
+      Object.assign(entry, { engine: found.engine, engines: found.engines });
+    }
     entry.health = await checkMachine(entry);
     const failing = entry.health.items.filter((item) => item.status === "fail");
     activity(store, `${entry.name} health check: ${failing.length ? `${failing.length} to fix (${failing.map((item) => item.title).join(", ")})` : "everything needed is there"}`);
@@ -193,6 +196,7 @@ async function fixMachine(entry, checkId, password) {
 }
 
 function startPrepare(entry) {
+  if (!entry.engine) throw new Error(`${entry.name} has no working Docker or Podman yet: fix it from its health check first`);
   entry.prepare = { status: "running", started: stamp() };
   store.save();
   prepare(entry).then((devices) => {
