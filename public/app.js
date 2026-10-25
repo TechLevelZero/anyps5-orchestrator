@@ -76,7 +76,7 @@ function stepper(current) {
 function wizard() {
   const step = ui.session?.hasPassword ? ui.state?.setup?.step || "github" : "password";
   const body = { password: stepPassword, github: stepGithub, mode: stepMode, machines: stepMachines, agents: stepConnect, assistant: stepConnect, agent: stepConnect }[step]?.() || "";
-  return shell(`<section class="card p-6 sm:p-8">${stepper(step)}${body}</section>`, false);
+  return shell(`${ui.state ? requestsPanel(ui.state) : ""}<section class="card p-6 sm:p-8">${stepper(step)}${body}</section>`, false);
 }
 
 function stepPassword() {
@@ -430,6 +430,8 @@ function render() {
   if (ui.session.hasPassword && !ui.session.authed) app.innerHTML = loginView();
   else if (!ui.state?.setup?.done) app.innerHTML = wizard();
   else app.innerHTML = dashboard();
+  const waiting = (ui.state?.requests || []).filter((request) => request.status === "pending").length;
+  document.title = waiting ? `(${waiting}) AnyPS5 Orchestrator` : "AnyPS5 Orchestrator";
   restore(app, saved);
 }
 
