@@ -109,6 +109,10 @@ test("fix recipes match the Linux family and the problem", () => {
   assert.ok(vulkan.commands[0].includes(`nvidia-driver-libs-$(rpm -q --qf '%{EPOCH}:%{VERSION}-%{RELEASE}.%{ARCH}' nvidia-driver-cuda)`));
   assert.match(recipeFor({ id: "nvidia-vulkan", status: "fail", code: "apt-server" }, debian).commands[1], /libnvidia-gl-.*-server/);
   assert.equal(recipeFor({ id: "nvidia-vulkan", status: "fail", code: "manual" }, debian).manual, true);
+  const release = recipeFor({ id: "nvidia-vulkan", status: "fail", code: "cuda-repo-release" }, { family: "fedora", user: "x", items: [] });
+  const script = release.commands.join("\n");
+  assert.equal(execFileSync("bash", ["-c", `ID=rhel; VERSION_ID=10.2; ${release.commands[1].replace(/^curl .* -o /, "echo ")}`]).toString().trim(), "/etc/yum.repos.d/cuda-rhel10-x86_64.repo");
+  assert.match(script, /repos\/rhel\$\{VERSION_ID%%\.\*\}\/x86_64\/cuda-rhel\$\{VERSION_ID%%\.\*\}\.repo/);
 });
 
 test("fix recipes never take shell text from the machine", () => {

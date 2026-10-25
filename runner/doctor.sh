@@ -53,7 +53,10 @@ if [ "$NVIDIA_PCI" = 1 ]; then
     if { ldconfig -p 2>/dev/null || /sbin/ldconfig -p 2>/dev/null; } | grep -q 'libGLX_nvidia\.so\.0'; then out nvidia-vulkan ok "NVIDIA Vulkan driver" "the driver's graphics libraries are installed, so containers get Vulkan on the GPU"
     else
       SOURCE=manual
-      if have rpm && rpm -q nvidia-driver-cuda >/dev/null 2>&1; then SOURCE=cuda-repo
+      if have rpm && rpm -q nvidia-driver-cuda >/dev/null 2>&1; then
+        SOURCE=cuda-repo
+        REPO_EL=$(grep -hoE 'cuda/repos/rhel[0-9]+' /etc/yum.repos.d/*.repo 2>/dev/null | grep -oE '[0-9]+$' | sort -u | tr '\n' ' ')
+        case " ${ID:-} " in *" rhel "*|*" rocky "*|*" almalinux "*|*" centos "*) case " $REPO_EL" in *" ${VERSION_ID%%.*} "*) ;; *) SOURCE=cuda-repo-release ;; esac ;; esac
       elif have rpm && rpm -q xorg-x11-drv-nvidia >/dev/null 2>&1; then SOURCE=rpmfusion
       elif have dpkg-query && dpkg-query -W -f='${Package} ${Status}\n' 'nvidia-*' 2>/dev/null | grep 'install ok installed' | grep -q -- '-server '; then SOURCE=apt-server
       elif have dpkg-query && dpkg-query -W -f='${Package} ${Status}\n' 'nvidia-*' 2>/dev/null | grep -q 'install ok installed'; then SOURCE=apt
